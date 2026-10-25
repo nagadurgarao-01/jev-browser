@@ -163,16 +163,5 @@ uv build
 - DOM reader covers common HTML and ARIA controls, not the full accessible-name spec
 - Owned tabs share the existing Chrome profile
 
----
-
-## Roadmap
-
-- [x] Phase 1 — Human-in-the-loop / 2FA handoff
-- [x] Phase 2 — Structured data extraction cards
-- [x] Phase 3 — Knowledge graph visualiser
-- [x] Phase 4 — Fast-path macro replay
-- [ ] Phase 5 — Auto-dismiss cookie banners & popup tab handler
-
----
 
 Built on [TypeSafe](https://docs.typesafe.ai) · [Browser Harness](https://github.com/browser-use/browser-harness) · [Browser Use](https://github.com/browser-use/browser-use)
