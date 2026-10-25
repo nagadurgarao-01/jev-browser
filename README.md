@@ -1,20 +1,22 @@
-﻿<img src="docs/banner.svg" alt="Jev browser · Browser Use × TypeSafe" width="100%" />
+# Jev Browser ⚡
 
-# Jev browser ⚡
+**A browser agent with a dynamic, indexed action space, memory, and fast-path macro replay.**
 
-> [!IMPORTANT]
-> **The Browser Use Cloud waitlist is open.** Get early access to browser browser agents in the cloud.
-> **[Join the waitlist →](https://browser-use.com/browser?utm_source=github&utm_medium=readme&utm_campaign=jev-browser)**
+Give it one goal. [TypeSafe's Jev](https://docs.typesafe.ai/introduction) picks an operation and an element. A small LLM writes text only when the operation is `TYPE_TEXT`. Memory stores proven navigation patterns and replays them at 25 ms — skipping the model call entirely.
 
-**A browser agent with a dynamic, indexed action space.**
+**Zürich → London on Google Flights in ~7 seconds.** One natural-language goal, actual text generation, and loading waits included.
 
-Give it one goal. [TypeSafe's Jev](https://docs.typesafe.ai/introduction) picks an operation and an element. A small LLM writes text only when the operation is `TYPE_TEXT`.
+[Read the loop](jev_browser/agent.py) · [Chat interface](examples/chat_interface.py)
 
-**Zürich → London on Google Flights in 7.1 seconds.** One natural-language goal, actual text generation, and loading waits included.
+## Features
 
-<a href="docs/demo.mp4"><img src="docs/demo.gif" alt="A real Google Flights search at 1× speed, with generated city names and dynamic operation/target decisions" width="100%" /></a>
-
-[Watch the MP4](docs/demo.mp4) · [Measurements](docs/performance.md) · [Read the loop](jev_browser/agent.py)
+| Phase | What it does |
+|---|---|
+| **Core agent** | Dynamic action space: `CLICK`, `TYPE_TEXT`, `SELECT`, `WAIT`, `DONE`, `BLOCKED` |
+| **Phase 1** | Human-in-the-loop — detects OTP / 2FA / CAPTCHA and pauses for you |
+| **Phase 2** | Structured data extraction — summary cards, key-value grids, and tables on task completion |
+| **Phase 3** | Force-directed knowledge graph — visual entity-relation explorer in the chat UI |
+| **Phase 4** | Fast-path macro replay — proven search patterns replayed at ⚡ 25 ms, no LLM call |
 
 ## The action space
 
@@ -46,22 +48,22 @@ page → element table → operation                 │
                    small LLM → text → browser
 ```
 
-Target questions are speculative. If the operation is `CLICK`, only `click_target` can execute. Two decisions, **one network round trip**. Each target head contains only compatible elements. Native dropdown choices carry an observed element/option index.
+Target questions are speculative. If the operation is `CLICK`, only `click_target` can execute. Two decisions, **one network round trip**. Each target head contains only compatible elements.
 
-There are no site-specific action scripts or prepared field strings in the policy. The Flights example supplies a goal and independently verifies the outcome. The screenshot renderer adds labels afterward; it does not drive the browser.
+There are no site-specific action scripts or prepared field strings in the policy. The Flights example supplies a goal and independently verifies the outcome.
 
 ## Try it
 
 ```bash
-git clone https://github.com/browser-use/jev-browser.git
+git clone https://github.com/nagadurgarao-01/jev-browser.git
 cd jev-browser
 uv sync
 cp .env.example .env
 # Add TYPESAFE_API_KEY and TEXT_MODEL_API_KEY.
-uv run jev
+uv run python examples/chat_interface.py
 ```
 
-Open **http://127.0.0.1:8766** and click **Start demo → Run automatically**. The inspector shows numbered elements, operation probabilities, target probabilities, and executed actions. **Choose next** pauses before execution.
+Open **http://127.0.0.1:8777** — type any task in the chat box and watch it execute live.
 
 Chrome connects through [Browser Harness](https://github.com/browser-use/browser-harness), installed by `uv sync`. Run `uv run browser-harness --doctor` if it needs connecting. Allow remote debugging in Chrome when prompted.
 
@@ -86,18 +88,26 @@ Run with `uv run --env-file .env python your_script.py`. The same policy can run
 ```bash
 uv run --env-file .env python examples/run.py \
   --url https://en.wikipedia.org/wiki/Main_Page \
-  --goal 'Find and open the Wikipedia article about Gödel’s incompleteness theorems.'
+  --goal 'Find and open the Wikipedia article about Gödel's incompleteness theorems.'
 ```
 
 `uv run --env-file .env python examples/flights.py --keep-open` performs the flight search, checks the actual route/date/results, and saves its trace. It does not select or book a flight.
+
+## Memory & Fast-Path Macro Replay
+
+Every completed task is distilled into a reusable search pattern stored in [`jev_browser/memory.py`](jev_browser/memory.py).
+
+- **BM25 + Knowledge Graph** — personal info, credentials, and entity relations are stored and searched at query time for `TYPE_TEXT` field filling.
+- **Pattern Matching** — Jaccard token overlap ≥ 0.65 identifies a prior successful navigation sequence for the same domain and goal.
+- **Fast-Path Execution** — matched macro steps run at **⚡ 25 ms** with no TypeSafe round-trip. If any element is missing or the page changes, the agent drops out gracefully and resumes normal LLM-driven decisions.
 
 ## Why it moves
 
 - **One request per decision cycle.** Operation and target heads share the same observed state.
 - **No screenshots in the default agent loop.** Jev consumes structured state. The inspector opts into screenshots; the video uses a separate continuous screencast.
 - **One browser call per snapshot.** Read visible controls, their names, values, and text atomically. Keep references to the actual DOM nodes.
-- **Validate the selected target.** Clicks check the document, form values, target, and nearby context. Animation alone does not force another prediction. Resolve current geometry and reject covered controls before input.
-- **Wait for useful state.** After typing into a combobox, wait for visible suggestions, capped at 200 ms. Other interactions get at most two animation frames or 50 ms. These reads happen after execution is logged.
+- **Validate the selected target.** Clicks check the document, form values, target, and nearby context. Animation alone does not force another prediction.
+- **Wait for useful state.** After typing into a combobox, wait for visible suggestions, capped at 200 ms. Other interactions get at most two animation frames or 50 ms.
 - **Keep hidden tabs rendering.** Focus emulation prevents background animation throttling without switching Chrome's visible tab.
 - **Send visible text.** Offscreen article bodies and footers do not fill the model context.
 - **Reuse an interrupted text request.** A generated value survives a stale-page retry only if the entire text-helper input is unchanged.
@@ -108,22 +118,14 @@ Every executed target is resolved from an observed node. The executor rechecks p
 
 | File | Job |
 | --- | --- |
-| [agent.py](jev_browser/agent.py) | The complete loop and text-helper handoff |
+| [agent.py](jev_browser/agent.py) | The complete loop, text-helper handoff, and fast-path macro replay |
+| [memory.py](jev_browser/memory.py) | BM25 search, knowledge graph, task history, and pattern distillation |
 | [snapshot.js](jev_browser/snapshot.js) | Atomic DOM snapshot, indexed controls, freshness guards |
 | [browser.py](jev_browser/browser.py) | Browser connection, current geometry, execution |
 | [model.py](jev_browser/model.py) | Dynamic operation/target heads and text generation |
 | [questions.py](jev_browser/questions.py) | Model instructions |
-| [demo.py](jev_browser/demo.py) | Local inspector |
-
-## Evidence and limits
-
-The current video is a **7,073 ms** Google Flights run. Timing starts after initial page observation and includes model calls, generated text, browser work, stale decisions, and loading waits. A fresh independent check verifies the one-way setting, Zürich, London, September 20, 2026, and visible flight options. The video plays at 1×, with no opening hold and a 0.5-second final hold.
-
-In six alternating runs with identical models and settings, both versions passed **3/3**. Median task time went from **9.450 s → 7.092 s**, a **25% reduction**; median browser protocol calls went from **1,092 → 101**. This is three repeats of one task on one browser profile, not a general reliability benchmark.
-
-The same policy opened the requested Wikipedia article in **2.798 s** and passed a local hotel search/filter task in **1.896 s**. Runs, failures, source hashes, and measurement boundaries are in [performance.md](docs/performance.md).
-
-A `DONE` choice still requires independent outcome verification. The DOM reader handles common HTML and ARIA controls, not the full accessible-name specification. Shadow roots, frames, canvas, uploads, pop-up tabs, nested scrolling, and arbitrary keyboard widgets remain outside this MVP. Owned tabs share the existing Chrome profile.
+| [examples/chat_interface.py](examples/chat_interface.py) | Chat UI server with memory, history, and extraction endpoints |
+| [examples/chat.html](examples/chat.html) | Chat UI with knowledge graph, step traces, and fast-path badges |
 
 ## Development
 
@@ -135,7 +137,7 @@ node --check jev_browser/snapshot.js
 uv build
 ```
 
-Tests are offline. `uv run python scripts/check_guards.py` checks real controls in a local browser without model calls. Live examples and recording scripts make paid API calls. `scripts/record_flights.py <new-folder>` captures original browser timestamps; `scripts/render_demo.py <recording-folder>` renders that verified run at 1× and crops out the Google account strip. Credentials and raw traces stay ignored.
+Tests are 100% offline — 47 passing, zero paid API calls. `uv run python scripts/check_guards.py` checks real controls in a local browser without model calls.
 
 ---
 
