@@ -7,9 +7,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from jev_ultrafast import agent as loop
-from jev_ultrafast import model
-from jev_ultrafast.browser import StalePage, browser_operation, fingerprint
+from jev_browser import agent as loop
+from jev_browser import model
+from jev_browser.browser import StalePage, browser_operation, fingerprint
 
 
 def page():
@@ -175,6 +175,10 @@ def runner():
         "record": False,
         "text_calls": [],
     }
+    a.macro_steps = []
+    a.macro_idx = 0
+    a.macro_pattern = None
+    a.memory = None
     return a
 
 
@@ -228,7 +232,7 @@ def test_stale_observation_preserves_executed_action(runner):
 
 
 def test_observation_is_one_atomic_browser_read(monkeypatch):
-    import jev_ultrafast.browser as browser
+    import jev_browser.browser as browser
 
     p = page()
     cdp = Mock(return_value={"result": {"value": p}})
@@ -240,7 +244,7 @@ def test_observation_is_one_atomic_browser_read(monkeypatch):
 
 
 def test_executor_rejects_a_stale_page_before_browser_input(monkeypatch):
-    import jev_ultrafast.browser as browser
+    import jev_browser.browser as browser
 
     b = browser.Browser.__new__(browser.Browser)
     b.fresh = Mock(return_value=False)
@@ -253,7 +257,7 @@ def test_executor_rejects_a_stale_page_before_browser_input(monkeypatch):
 
 @pytest.mark.parametrize("response", [{"exceptionDetails": {}}, {"result": {}}])
 def test_interrupted_dropdown_mutation_cannot_be_retried_as_stale(monkeypatch, response):
-    import jev_ultrafast.browser as browser
+    import jev_browser.browser as browser
 
     # A navigation can destroy the evaluation result after the change event already fired.
     if "exceptionDetails" in response:
@@ -318,3 +322,101 @@ def test_navigation_during_prediction_reobserves_without_action(runner):
     assert runner.state["status"] == "ready"
     assert runner.state["decision"] is None
     runner.state["browser"].act.assert_not_called()
+
+
+def test_detect_human_intervention():
+    # 2FA / OTP in text
+    p1 = {"text": "Please enter the one-time password sent to your phone", "title": "Verification", "actions": []}
+    res1 = loop.detect_human_intervention(p1)
+    assert res1 is not None
+    assert res1["kind"] == "2fa_otp"
+
+    # CAPTCHA in title/text
+    p2 = {"text": "Solve this Cloudflare challenge to proceed", "title": "Security Check", "actions": []}
+    res2 = loop.detect_human_intervention(p2)
+    assert res2 is not None
+    assert res2["kind"] == "captcha"
+
+    # OTP in input field action
+    p3 = {"text": "Welcome", "title": "Sign in", "actions": [{"id": "e1", "kind": "fill", "label": "Enter OTP"}]}
+    res3 = loop.detect_human_intervention(p3)
+    assert res3 is not None
+    assert res3["kind"] == "2fa_otp"
+
+    # Regular page
+    p4 = {"text": "Search results for flights", "title": "Flights", "actions": []}
+    assert loop.detect_human_intervention(p4) is None
+
+
+def test_agent_resume_command(runner):
+    runner.state["status"] = "waiting_for_human"
+    runner.state["human_intervention"] = {"kind": "2fa_otp", "reason": "SMS Code"}
+    snap = runner.command("resume", {})
+    assert snap["status"] == "ready"
+    assert snap["human_intervention"] is None
+
+
+def test_agent_fast_path_macro_replay(runner):
+    # Set up mock memory with matching pattern for the domain
+    mock_memory = Mock()
+    mock_memory.search.return_value = []
+    mock_memory.find_matching_pattern.return_value = {
+        "id": "pat_1",
+        "domain": "example.test",
+        "goal": "Find a book",
+        "replay_actions": [
+            {"action": "Search", "kind": "fill", "operation": "TYPE_TEXT", "text": "book"},
+            {"action": "Go", "kind": "click", "operation": "CLICK", "text": None},
+        ],
+    }
+    runner.memory = mock_memory
+    runner.state["status"] = "ready"
+    runner.state["decision"] = None
+
+    # Step 1: predict using macro step 0
+    snap = runner.command("predict")
+    assert snap["status"] == "predicted"
+    assert snap["decision"]["fast_path"] is True
+    assert snap["decision"]["choice"] == "e1"  # "Search" input
+    assert snap["decision"]["operation"] == "TYPE_TEXT"
+    assert snap["decision"]["latency_ms"] == 25
+    assert snap["decision"]["model"] == "fast-path-macro"
+
+    # Step 1 act
+    snap = runner.command("act", {"fingerprint": runner.state["page"]["fingerprint"]})
+    assert len(runner.state["history"]) == 1
+    assert runner.state["history"][-1]["fast_path"] is True
+    assert runner.state["history"][-1]["text"] == "book"
+
+    # Step 2: predict using macro step 1
+    snap = runner.command("predict")
+    assert snap["decision"]["fast_path"] is True
+    assert snap["decision"]["choice"] == "e3"  # "Go" button
+    assert snap["decision"]["operation"] == "CLICK"
+
+
+def test_agent_fast_path_macro_fallback_on_mismatch(runner, monkeypatch):
+    mock_memory = Mock()
+    mock_memory.find_matching_pattern.return_value = {
+        "id": "pat_2",
+        "domain": "example.test",
+        "goal": "Find a book",
+        "replay_actions": [
+            {"action": "NonExistentButton", "kind": "click", "operation": "CLICK"},
+        ],
+    }
+    runner.memory = mock_memory
+    runner.state["status"] = "ready"
+    runner.state["decision"] = None
+
+    # Normal choose mock
+    monkeypatch.setattr(loop, "choose", Mock(return_value=decision("e3")))
+
+    # Predict should detect mismatch and fall back to choose cleanly
+    snap = runner.command("predict")
+    assert snap["status"] == "predicted"
+    assert snap["decision"]["fast_path"] is False
+    assert snap["decision"]["choice"] == "e3"
+    assert runner.macro_steps == []
+
+

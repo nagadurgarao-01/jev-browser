@@ -1,8 +1,8 @@
-"""uv run --env-file .env python examples/run.py --url URL --goal 'A narrow goal'"""
+﻿"""uv run --env-file .env python examples/run.py --url URL --goal 'A narrow goal'"""
 
 import argparse
 
-from jev_ultrafast import Agent
+from jev_browser import Agent
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--url", required=True)

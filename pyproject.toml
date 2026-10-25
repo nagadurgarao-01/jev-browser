@@ -1,5 +1,5 @@
 [project]
-name = "jev-ultrafast"
+name = "jev-browser"
 version = "0.1.0"
 description = "A browser agent that chooses instead of generating."
 readme = "README.md"
@@ -8,7 +8,7 @@ requires-python = ">=3.12"
 dependencies = ["browser-harness==0.1.13", "httpx[http2]>=0.28,<1"]
 
 [project.scripts]
-jev = "jev_ultrafast.demo:main"
+jev = "jev_browser.demo:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -7,10 +7,10 @@ import time
 from pathlib import Path
 
 from browser_harness.admin import ensure_daemon
-from browser_harness.helpers import cdp
+from browser_harness.helpers import SCREENSHOT_IPC_RESPONSE_TIMEOUT_SECONDS, cdp
 
 # Atomically read visible content and controls, preserving actual DOM node identity.
-READ_STATE = Path(__file__).with_name("snapshot.js").read_text()
+READ_STATE = Path(__file__).with_name("snapshot.js").read_text(encoding="utf-8")
 MARKER = f"(() => {{ const state={READ_STATE}; return state?.marker ?? null; }})()"
 
 class StalePage(ValueError):
@@ -32,8 +32,9 @@ class Browser:
                 break
             time.sleep(0.02)
 
-    def call(self, method, **params):
-        return cdp(method, session_id=self.session, **params)
+    def call(self, method, _response_timeout=None, **params):
+        kwargs = {} if _response_timeout is None else {"_response_timeout": _response_timeout}
+        return cdp(method, session_id=self.session, **kwargs, **params)
 
     def evaluate(self, expression):
         response = self.call("Runtime.evaluate", expression=expression, returnByValue=True)
@@ -95,6 +96,12 @@ class Browser:
                 f"return c ? [c.pageKey(),c.guard(c.nodes.get({node}))] : null; }})()"
             )
             return current == [page["page_key"], page["guards"].get(str(node))]
+        if action is not None and action["kind"] == "scroll":
+            current = self.evaluate(
+                "(() => { const c=window.__jevFast; "
+                "return c ? c.pageKey().slice(0, 6) : null; })()"
+            )
+            return current == page["page_key"][:6]
         return self.evaluate(MARKER) == page["marker"]
 
     def act(self, action, page, text=None):
@@ -121,8 +128,9 @@ def browser_operation(request):
     operation = request["operation"]
     session = request["session"]
 
-    def call(method, **params):
-        return cdp(method, session_id=session, **params)
+    def call(method, _response_timeout=None, **params):
+        kwargs = {} if _response_timeout is None else {"_response_timeout": _response_timeout}
+        return cdp(method, session_id=session, **kwargs, **params)
 
     def evaluate(expression):
         result = call("Runtime.evaluate", expression=expression, returnByValue=True)
@@ -136,7 +144,26 @@ def browser_operation(request):
         action = request["action"]
         kind = action["kind"]
         if kind == "scroll":
-            call("Input.dispatchMouseEvent", type="mouseWheel", x=550, y=650, deltaX=0, deltaY=action["delta"])
+            delta = action["delta"]
+            evaluate("""(delta => {
+              const candidates = [
+                document.querySelector('main'),
+                document.querySelector('[role="main"]'),
+                ...(document.body ? [...document.body.children] : [])
+              ].filter(Boolean);
+              for (const el of candidates) {
+                if (el.clientHeight > 200 && el.scrollHeight > el.clientHeight + 20) {
+                  const style = window.getComputedStyle(el);
+                  if (['auto', 'scroll', 'overlay'].includes(style.overflowY)) {
+                    el.scrollBy({top: delta, behavior: 'instant'});
+                    return;
+                  }
+                }
+              }
+              const root = document.scrollingElement || document.documentElement || window;
+              root.scrollBy({top: delta, behavior: 'instant'});
+            })(""" + str(delta) + ")")
+            call("Input.dispatchMouseEvent", type="mouseWheel", x=550, y=400, deltaX=0, deltaY=delta)
         elif kind != "wait":
             if type(action["node"]) is not int:
                 raise ValueError("Invalid observed node")
@@ -190,5 +217,13 @@ def browser_operation(request):
         raise StalePage("Document is navigating")
     info["fingerprint"] = fingerprint(info)
     if request.get("screenshot", True):
-        info["screenshot"] = call("Page.captureScreenshot", format="jpeg", quality=72)["data"]
+        try:
+            info["screenshot"] = call(
+                "Page.captureScreenshot",
+                _response_timeout=SCREENSHOT_IPC_RESPONSE_TIMEOUT_SECONDS,
+                format="jpeg",
+                quality=72,
+            )["data"]
+        except Exception:
+            info["screenshot"] = None
     return info

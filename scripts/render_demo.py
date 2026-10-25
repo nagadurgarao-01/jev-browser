@@ -1,4 +1,4 @@
-"""Render the actual Google Flights screencast at 1x, including every loading wait."""
+﻿"""Render the actual Google Flights screencast at 1x, including every loading wait."""
 
 import argparse
 import json
@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("source", type=Path, help="Exact verified recording directory")
 args = parser.parse_args()
 source = args.source.resolve()
-state = json.loads((source / "state.json").read_text())
+state = json.loads((source / "state.json").read_text(encoding="utf-8"))
 assert state["verification"]["passed"] and not state["recording_errors"]
 frames = [(0, Image.open(source / "frames/000000.jpg").convert("RGB"))]
 frames += sorted((int(p.stem), Image.open(p).convert("RGB")) for p in (source / "screencast").glob("*.jpg"))
@@ -57,7 +57,7 @@ for i in range(round((end + 500) * 30 / 1000)):
     d.text((145, 201), "google.com/travel/flights", font=mono(13), fill="#d4d6d5")
     # Omit Google account controls in every frame. No content from the task area is redrawn.
     canvas.paste(screenshot.crop((0, 64, 1120, 780)), (36, 226))
-    d.text((1192, 206), "JEV ULTRAFAST", font=font(16, True), fill=green)
+    d.text((1192, 206), "JEV browser", font=font(16, True), fill=green)
     d.text((1189, 242), f"{t / 1000:05.2f}", font=mono(52), fill=ink)
     d.text((1193, 307), "SECONDS ELAPSED", font=font(13, True), fill=muted)
     history = [h for h in state["history"] if h["executed_ms"] <= t]
@@ -94,7 +94,7 @@ for i in range(round((end + 500) * 30 / 1000)):
         font=font(14),
         fill=muted,
     )
-    d.text((1194, 973), "github.com/browser-use/jev-ultrafast", font=font(12), fill=muted)
+    d.text((1194, 973), "github.com/browser-use/jev-browser", font=font(12), fill=muted)
     canvas.save(folder / f"{i:04d}.png")
 canvas.save(ROOT / "docs/flights-result.png")
 subprocess.run(

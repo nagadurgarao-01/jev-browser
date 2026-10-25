@@ -17,6 +17,9 @@ def post_json(url, key, body):
         try:
             response = CLIENT.post(url, json=body, headers={"Authorization": f"Bearer {key}"})
         except httpx.HTTPError:
+            if attempt < 2:
+                time.sleep(0.5 * 2**attempt)
+                continue
             raise RuntimeError("Model connection failed; no action executed.") from None
         if response.status_code in {429, 529, 503} and attempt < 2:
             time.sleep(0.5 * 2**attempt)
@@ -148,13 +151,19 @@ def choose(state, goal, history):
     }
 
 
-def field_context(goal, action, page, history):
-    return {
+def field_context(goal, action, page, history, memory=None):
+    context = {
         "goal": goal,
         "field": {k: action.get(k) for k in ("label", "role", "value")},
         "page": {"title": page["title"], "text": page["text"][:6000]},
         "recent_actions": [{k: h.get(k) for k in ("action", "text")} for h in history[-6:]],
     }
+    if memory:
+        query = f"{goal} {action.get('label', '')} {page.get('title', '')}".strip()
+        matches = memory.search(query, top_k=2)
+        if matches:
+            context["memory"] = [m["text"] for m in matches]
+    return context
 
 
 def field_text(context):
@@ -163,9 +172,17 @@ def field_text(context):
         raise ValueError("TYPE_TEXT needs TEXT_MODEL_API_KEY; no text is hardcoded or guessed by the executor.")
     base = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
     model = os.environ.get("TEXT_MODEL", "deepseek-chat")
-    reasoning = {"thinking": {"type": "disabled"}} if "api.deepseek.com/" in base else {"reasoning": {"effort": "low"}}
-    if os.environ.get("TEXT_MODEL_REASONING") == "none":
-        reasoning = {"reasoning": {"enabled": False}}
+    if "generativelanguage.googleapis.com/" in base:
+        effort = os.environ.get("TEXT_MODEL_REASONING", "low")
+        reasoning = {} if effort == "none" else {"reasoning_effort": effort}
+    else:
+        reasoning = (
+            {"thinking": {"type": "disabled"}}
+            if "api.deepseek.com/" in base
+            else {"reasoning": {"effort": "low"}}
+        )
+        if os.environ.get("TEXT_MODEL_REASONING") == "none":
+            reasoning = {"reasoning": {"enabled": False}}
     started = time.perf_counter()
     result = post_json(
         base + "/chat/completions",

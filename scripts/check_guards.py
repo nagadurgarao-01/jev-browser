@@ -1,8 +1,8 @@
-"""Local-browser freshness/execution regressions. No model calls or external websites."""
+﻿"""Local-browser freshness/execution regressions. No model calls or external websites."""
 
 from urllib.parse import quote
 
-from jev_ultrafast.browser import Browser, StalePage
+from jev_browser.browser import Browser, StalePage
 
 HTML = """<!doctype html><title>Guard checks</title>
 <style>body{margin:30px}button{width:180px;height:50px}#outside{position:absolute;top:3000px}</style>

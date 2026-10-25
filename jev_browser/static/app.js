@@ -92,8 +92,10 @@ function render() {
     return;
   }
   $("empty").hidden = true;
-  $("screenshot").hidden = false;
-  $("screenshot").src = `data:image/jpeg;base64,${page.screenshot}`;
+  if (page.screenshot) {
+    $("screenshot").hidden = false;
+    $("screenshot").src = `data:image/jpeg;base64,${page.screenshot}`;
+  }
   $("url").textContent = page.url;
   $("page-title").textContent = page.title;
   $("action-count").textContent = `${state.elements.length} elements`;
@@ -174,9 +176,17 @@ $("auto").addEventListener("click", () =>
       $("status").textContent = "Running…";
       if ($("pace").checked) {
         await call("predict");
-        await new Promise(resolve => setTimeout(resolve, 450));
+        await new Promise((resolve) => setTimeout(resolve, 450));
         if (!automatic) break;
-        await call("act", {fingerprint: state.page.fingerprint});
+        try {
+          await call("act", { fingerprint: state.page.fingerprint });
+        } catch (e) {
+          if (e.message && (e.message.includes("Page changed") || e.message.includes("Observe again"))) {
+            $("error").hidden = true;
+            continue;
+          }
+          throw e;
+        }
       } else {
         await call("tick");
       }

@@ -1,0 +1,1823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jev browser · Chat Interface</title>
+  <style>
+    :root {
+      font-family: InterVariable, Inter, system-ui, -apple-system, sans-serif;
+      color: #252523;
+      background: #fafaf7;
+      font-synthesis: none;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+      --line: rgb(0 0 0 / 0.09);
+      --green: #176743;
+      --orange: #ed6738;
+      --gray-badge: #f1f3ec;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { margin: 0; background: #fafaf7; color: #252523; min-height: 100vh; display: flex; flex-direction: column; }
+    header {
+      height: 80px;
+      padding: 0 4%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      background: white;
+    }
+    a { color: inherit; text-decoration: none; }
+    .brand { font-size: 22px; font-weight: 580; letter-spacing: -0.8px; }
+    .brand span { color: var(--orange); }
+    .brand i { font-style: normal; color: #aba9a4; margin: 0 18px; }
+    .local { font-size: 13px; color: #6d6d66; display: flex; gap: 8px; align-items: center; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #72a589; display: inline-block; }
+    .dot.running { background: #eab308; animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+    main { isolation: isolate; max-width: 1720px; width: 100%; margin: auto; padding: 30px 4% 30px; flex: 1; display: flex; flex-direction: column; }
+    .intro { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+    .eyebrow { font: 11px ui-monospace, monospace; letter-spacing: 1.7px; color: #77796f; margin: 0 0 10px; text-transform: uppercase; }
+    h1 { font-size: clamp(24px, 2.35vw, 36px); font-weight: 500; letter-spacing: -1.2px; margin: 0; }
+    p { font-size: 14px; line-height: 1.6; color: #77776e; margin-top: 8px; }
+    .model-tag { white-space: nowrap; font: 12px ui-monospace, monospace; border: 1px solid var(--line); padding: 9px 12px; border-radius: 6px; background: white; }
+    .model-tag span { color: #898980; }
+    form { padding: 18px 20px; background: white; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 20px; }
+    .task-label { display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 12px; color: #77776e; margin-bottom: 10px; }
+    .task-row { display: flex; align-items: center; gap: 16px; }
+    input[type="text"] { width: 100%; flex: 1; border: 0; background: transparent; font-size: 15px; outline: 0; padding: 6px 0; color: #343530; font-family: inherit; }
+    button {
+      white-space: nowrap; min-height: 38px; padding: 8px 18px; font-size: 13px; font-weight: 500;
+      border: 1px solid var(--line); border-radius: 6px; background: white; color: #494b43; cursor: pointer;
+      transition: background 0.15s, transform 0.1s; font-family: inherit;
+    }
+    button:hover { background: #f2f3ed; }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.35; cursor: default; }
+    .primary { background: var(--green); color: white; border-color: transparent; }
+    .primary:hover { background: #105b37; }
+    .primary span { padding-left: 8px; }
+    .danger { background: #dc2626; color: white; border-color: transparent; display: inline-flex; align-items: center; gap: 6px; }
+    .danger:hover { background: #b91c1c; }
+    .danger:active { transform: scale(0.98); }
+    .suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .suggestion-chip {
+      background: #f7f7f3; border: 1px solid var(--line); color: #585b52; padding: 5px 12px;
+      border-radius: 999px; font-size: 12px; cursor: pointer; transition: all 0.15s;
+    }
+    .suggestion-chip:hover { background: #eeefe9; border-color: #c4c6bc; color: #222; }
+    .toolbar { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 0 0 14px; }
+    .status { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #444; }
+
+    /* Main Workspace Layout */
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(310px, 0.85fr) minmax(340px, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: white;
+      min-height: 600px;
+    }
+
+    /* Column 1: Browser Panel */
+    .browser-panel { display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+    .browser-bar { height: 45px; display: flex; align-items: center; gap: 16px; padding: 0 18px; border-bottom: 1px solid var(--line); background: #f9f9f5; }
+    .traffic { display: flex; gap: 5px; }
+    .traffic b { width: 7px; height: 7px; border-radius: 50%; background: #d1d3c9; }
+    .browser-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px ui-monospace, monospace; color: #777b70; }
+    .live { font: 9px ui-monospace, monospace; letter-spacing: 1px; color: #548260; font-weight: 700; }
+    .viewport { flex: 1; background: #fdfdfb; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 480px; }
+    .viewport img { width: 100%; height: 100%; object-fit: contain; display: block; outline: 1px solid rgb(0 0 0 / 0.05); }
+    .viewport img[hidden] { display: none; }
+    .empty-state { color: #8e9185; font-size: 13px; text-align: center; padding: 40px; }
+    .empty-state[hidden] { display: none; }
+    .browser-footer {
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 11px 16px;
+      font: 10px ui-monospace, monospace;
+      color: #818577;
+      background: #fdfdfb;
+    }
+
+    /* Overlays on screenshot */
+    .target {
+      position: absolute;
+      border: 1px solid rgb(69 128 93 / 0.55);
+      border-radius: 3px;
+      pointer-events: none;
+    }
+    .target span {
+      position: absolute;
+      top: -8px;
+      left: -5px;
+      border-radius: 3px;
+      background: #e9f2e7;
+      color: #245934;
+      font: 9px ui-monospace, monospace;
+      padding: 1px 3px;
+      border: 1px solid #adc7ae;
+    }
+    .target.selected {
+      border: 2px solid var(--orange);
+      background: rgb(237 103 56 / 0.12);
+    }
+    .target.selected span {
+      background: var(--orange);
+      color: white;
+      border-color: var(--orange);
+    }
+
+    /* Column 2: Next Action Card (Original Demo ASIDE) */
+    aside {
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      background: white;
+      min-height: 0;
+      max-height: 680px;
+      overflow: hidden;
+    }
+    .aside-header {
+      padding: 20px 20px 16px;
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .aside-header h2 {
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: -0.35px;
+      margin: 0;
+      line-height: 1.3;
+      color: #222;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .aside-header > span {
+      font: 10px ui-monospace, monospace;
+      color: #898d80;
+      white-space: nowrap;
+      padding-top: 2px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 0 20px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .metrics div:last-child {
+      grid-column: span 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .metrics span {
+      display: block;
+      font-size: 10px;
+      color: #8d9085;
+      margin-bottom: 6px;
+    }
+    .metrics strong {
+      font-size: 22px;
+      font-weight: 450;
+      letter-spacing: -0.9px;
+      color: #222;
+    }
+    .metrics div:last-child strong {
+      font-size: 14px;
+      font-family: ui-monospace, monospace;
+      color: #176743;
+    }
+    .operation-choices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #fafaf7;
+    }
+    .operation-choice {
+      font: 10px ui-monospace, monospace;
+      padding: 4px 8px;
+      border: 1px solid #dbe2d4;
+      border-radius: 5px;
+      color: #687260;
+      background: white;
+    }
+    .operation-choice.best {
+      color: #185c3b;
+      background: #eef6e5;
+      border-color: #88ac79;
+      font-weight: 600;
+    }
+    .distribution-label {
+      display: flex;
+      justify-content: space-between;
+      padding: 14px 20px 8px;
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: #333;
+    }
+    .distribution-label span {
+      color: #909487;
+      font-size: 10px;
+      font-weight: normal;
+    }
+    .choices {
+      overflow-y: auto;
+      flex: 1;
+      padding: 0 12px;
+      min-height: 140px;
+    }
+    .choice {
+      position: relative;
+      display: grid;
+      grid-template-columns: 29px 1fr 38px;
+      align-items: start;
+      gap: 7px;
+      padding: 10px 8px;
+      border-bottom: 1px solid rgb(0 0 0 / 0.05);
+      font-size: 12px;
+      isolation: isolate;
+    }
+    .choice.best {
+      background: #f0f5ec;
+      border-radius: 5px;
+      border-color: transparent;
+    }
+    .choice-id {
+      font: 10px ui-monospace, monospace;
+      color: #8d9585;
+      padding-top: 2px;
+    }
+    .choice-label {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .choice-label small {
+      display: block;
+      font-size: 9px;
+      color: #919786;
+      margin-top: 3px;
+    }
+    .bar {
+      height: 2px;
+      background: #a6b89a;
+      width: var(--probability);
+      margin-top: 6px;
+      max-width: 100%;
+    }
+    .probability {
+      font: 11px ui-monospace, monospace;
+      text-align: right;
+      color: #6b7561;
+    }
+    .aside-note {
+      color: #929889;
+      font-size: 10px;
+      padding: 11px 20px;
+      margin: 0;
+      border-top: 1px solid var(--line);
+      background: #fafaf7;
+    }
+
+    /* Column 3: Chat Panel */
+    .chat-panel { display: flex; flex-direction: column; background: #fafaf7; }
+    .chat-header { padding: 12px 18px; border-bottom: 1px solid var(--line); background: #f9f9f5; font-size: 12px; font-weight: 580; color: #64675e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; max-height: 600px; }
+    .chat-msg { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.5; }
+    .chat-msg.user { background: #f3f5ee; border-color: #d9ddd2; align-self: flex-end; max-width: 85%; }
+    .chat-msg.assistant { align-self: stretch; }
+    .msg-header { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-family: ui-monospace, monospace; color: #8a8d80; margin-bottom: 6px; }
+    .trace-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .trace-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 7px 10px; background: #f8f9f5; border: 1px solid var(--line); border-radius: 6px; font-size: 12px;
+    }
+    .trace-row .num { font: 11px ui-monospace, monospace; color: #929586; font-weight: 600; }
+    .trace-row .action-desc { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .trace-row .lat { font: 11px ui-monospace, monospace; color: #548260; }
+    .fast-path-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font: 10px ui-monospace, monospace;
+      font-weight: 600;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      padding: 1px 6px;
+      border-radius: 999px;
+      margin-right: 4px;
+    }
+
+    @media (max-width: 1350px) {
+      .workspace { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 1fr); }
+      .chat-panel { grid-column: span 2; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 850px) {
+      .workspace { grid-template-columns: 1fr; }
+      .browser-panel { border-right: none; }
+      aside { border-right: none; border-top: 1px solid var(--line); }
+      .chat-panel { grid-column: span 1; border-top: 1px solid var(--line); }
+    }
+
+    /* Memory Vault Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+      display: flex; align-items: center; justify-content: center; z-index: 9999;
+      backdrop-filter: blur(2px);
+    }
+    .modal-dialog {
+      background: white; border: 1px solid var(--line); border-radius: 12px;
+      width: 90%; max-width: 660px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      display: flex; flex-direction: column; overflow: hidden; max-height: 85vh;
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between; background: #fafaf7;
+    }
+    .modal-body { padding: 18px 20px 22px; overflow-y: auto; }
+    .mem-card {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 12px; background: #fdfdfb; border: 1px solid var(--line);
+      border-radius: 6px; font-size: 13px;
+    }
+    .mem-card-text { flex: 1; overflow-wrap: anywhere; color: #333; }
+    .mem-card-cat {
+      font: 10px ui-monospace, monospace; text-transform: uppercase;
+      padding: 2px 6px; border-radius: 4px; background: #e9f2e7; color: #176743;
+      white-space: nowrap; font-weight: 600;
+    }
+    .mem-card-score {
+      font: 10px ui-monospace, monospace; color: #555; background: #f0f0eb;
+      padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+    }
+    .del-btn {
+      background: transparent; border: none; color: #999; cursor: pointer;
+      font-size: 16px; padding: 2px 6px; border-radius: 4px;
+    }
+    .del-btn:hover { color: #dc2626; background: #fee2e2; }
+
+    /* Google Gemini Memory UI Techniques */
+    .gemini-memory-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #f0f4f9;
+      border: 1px solid #d3e3fd;
+      border-radius: 999px;
+      padding: 3px 12px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #0b57d0;
+      margin-top: 8px;
+      margin-bottom: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .gemini-memory-pill.updated {
+      background: #f4f0fa;
+      border-color: #e0d7fe;
+      color: #6546dc;
+    }
+    .gemini-sparkle {
+      font-size: 13px;
+      background: linear-gradient(135deg, #4285f4, #9b72cb, #d96570);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-block;
+    }
+    .gemini-info-text {
+      color: #444746;
+      font-weight: 400;
+      max-width: 380px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .gemini-toggle {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+    .gemini-toggle input { opacity: 0; width: 0; height: 0; }
+    .gemini-toggle-slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background-color: #c4c7c5; border-radius: 20px;
+      transition: .25s;
+    }
+    .gemini-toggle-slider:before {
+      position: absolute; content: ""; height: 14px; width: 14px;
+      left: 3px; bottom: 3px; background-color: white; border-radius: 50%;
+      transition: .25s;
+    }
+    .gemini-toggle input:checked + .gemini-toggle-slider {
+      background-color: #0b57d0;
+    }
+    .gemini-toggle input:checked + .gemini-toggle-slider:before {
+      transform: translateX(16px);
+    }
+    .gemini-filter-chip {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: white;
+      color: #555;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all .15s;
+    }
+    .gemini-filter-chip.active {
+      background: #e8f0fe;
+      color: #0b57d0;
+      border-color: #d3e3fd;
+      font-weight: 600;
+    }
+    .gemini-source-badge {
+      font-size: 10px;
+      font-weight: 500;
+      color: #727775;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .gemini-source-badge.learned {
+      color: #7c3aed;
+    }
+    /* Human in the loop Intervention Banner */
+    .intervention-banner {
+      background: linear-gradient(135deg, #fffbeb, #fef3c7);
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin: 12px 0;
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      animation: pulse-border 2s infinite ease-in-out;
+    }
+    @keyframes pulse-border {
+      0%, 100% { border-color: #fde68a; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); }
+      50% { border-color: #f59e0b; box-shadow: 0 4px 16px rgba(217, 119, 6, 0.18); }
+    }
+    .intervention-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .intervention-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #92400e;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .intervention-desc {
+      font-size: 12px;
+      color: #78350f;
+      line-height: 1.4;
+    }
+    .intervention-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .intervention-actions input {
+      background: white;
+      border: 1px solid #d97706;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      width: 140px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-align: center;
+    }
+    .intervention-btn-resume {
+      background: #d97706;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s;
+    }
+    .intervention-btn-resume:hover {
+      background: #b45309;
+    }
+
+    /* Structured Extraction Card Styles */
+    .extraction-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-top: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    .extraction-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 6px;
+    }
+    .extraction-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .extraction-copy-btn {
+      font-size: 11px;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #475569;
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all .15s;
+    }
+    .extraction-copy-btn:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .extraction-summary {
+      font-size: 12px;
+      color: #334155;
+      line-height: 1.45;
+      margin-bottom: 10px;
+    }
+    .extraction-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .extraction-item {
+      background: #f8fafc;
+      border: 1px solid #f1f5f9;
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
+    .extraction-item-key {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+    .extraction-item-val {
+      font-size: 13px;
+      font-weight: 600;
+      color: #0f172a;
+      overflow-wrap: anywhere;
+    }
+    .extraction-table-wrapper {
+      max-height: 160px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+    }
+    .extraction-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      text-align: left;
+    }
+    .extraction-table th {
+      background: #f1f5f9;
+      padding: 6px 8px;
+      color: #475569;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+    .extraction-table td {
+      padding: 6px 8px;
+      border-top: 1px solid #f1f5f9;
+      color: #334155;
+    }
+
+    /* Force-directed Graph Visualizer Canvas Styles */
+    .graph-canvas-container {
+      position: relative;
+      background: #fafaf8;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      height: 220px;
+    }
+    .graph-canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .graph-canvas-toolbar {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 6px;
+      z-index: 5;
+    }
+    .graph-canvas-btn {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #555;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .graph-canvas-btn:hover {
+      background: #f0f4f9;
+      color: #0b57d0;
+    }
+    .graph-legend {
+      position: absolute;
+      bottom: 8px;
+      left: 10px;
+      font-size: 10px;
+      color: #888;
+      display: flex;
+      gap: 10px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">browser<span>use</span> <i>×</i> TypeSafe</div>
+    <div class="local"><span class="dot" id="header-dot"></span> Jev browser Chat</div>
+  </header>
+  <main>
+    <section class="intro">
+      <div>
+        <p class="eyebrow">A BROWSER THAT CHOOSES</p>
+        <h1>Every page is a set of possibilities.</h1>
+        <p>Jev picks the next action in real-time. Give it any goal in plain English.</p>
+      </div>
+      <div class="model-tag">jev-latest <span>+ text helper</span></div>
+    </section>
+    <form id="chat-form">
+      <div class="task-label">
+        <label for="user-input">Give it a task</label>
+        <span style="font-size:11px; color:#888;">Live Web & Fixtures</span>
+      </div>
+      <div class="task-row">
+        <input type="text" id="user-input" placeholder="Type a task (e.g. open linkedin and like the first post)..." autocomplete="off" />
+        <button type="submit" id="send-btn" class="primary">
+          Start task <span>↗</span>
+        </button>
+        <button type="button" id="stop-btn" class="danger" style="display:none;">
+          Stop <span>⏹</span>
+        </button>
+      </div>
+      <div class="suggestions">
+        <button type="button" class="suggestion-chip" onclick="sendSuggestion('open linkedin and like the first post')">open linkedin and like the first post</button>
+        <button type="button" class="suggestion-chip" onclick="sendSuggestion('Find the article on Alan Turing on Wikipedia')">Alan Turing on Wikipedia</button>
+        <button type="button" class="suggestion-chip" onclick="sendSuggestion('Find one-way flights from Zurich to London on September 20, 2026 on Google Flights')">Zurich to London Flights</button>
+        <button type="button" class="suggestion-chip" onclick="sendSuggestion('Go to https://news.ycombinator.com and open newest')">Hacker News newest</button>
+      </div>
+    </form>
+    <div class="toolbar">
+      <div class="status">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Ready to explore</span>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button type="button" id="memory-btn" onclick="openMemoryModal()" style="font-size:12px; min-height:30px; padding:4px 14px; display:inline-flex; align-items:center; gap:7px; border-radius:999px; background:white; border:1px solid #d3e3fd; color:#0b57d0; font-weight:500;">
+          <span class="gemini-sparkle">✨</span> Saved info <span id="memory-count-badge" style="background:#e8f0fe; color:#1a73e8; font-size:10px; font-weight:700; padding:1px 7px; border-radius:10px;">0</span>
+        </button>
+        <button type="button" id="toolbar-stop-btn" class="danger" style="display:none; font-size:12px; min-height:30px; padding:4px 12px;">
+          Stop execution ⏹
+        </button>
+      </div>
+    </div>
+    <div class="workspace">
+      <!-- 1. Browser Panel with Live View & Overlays -->
+      <div class="browser-panel">
+        <div class="browser-bar">
+          <div class="traffic"><b></b><b></b><b></b></div>
+          <span class="browser-url" id="browser-url">about:blank</span>
+          <span class="live">LIVE</span>
+        </div>
+        <div class="viewport" id="viewport">
+          <div class="empty-state" id="empty-state">Browser actions and live page previews will render here.</div>
+          <img id="screenshot" alt="Live screenshot" hidden />
+          <div id="targets"></div>
+        </div>
+        <div class="browser-footer">
+          <span id="page-title">Isolated demo tab</span>
+          <span>AX tree → typed actions → CDP</span>
+        </div>
+      </div>
+
+      <!-- 2. Next Action Card (Original Demo Feature) -->
+      <aside>
+        <div class="aside-header">
+          <div>
+            <p class="eyebrow">NEXT ACTION</p>
+            <h2 id="choice-title">Waiting for a page</h2>
+          </div>
+          <span id="action-count">0 options</span>
+        </div>
+        <div class="metrics">
+          <div><span>Decision time</span><strong id="latency">—</strong></div>
+          <div><span>Target confidence</span><strong id="confidence">—</strong></div>
+          <div><span>Operation</span><strong id="completion">—</strong></div>
+        </div>
+        <div id="operation-choices" class="operation-choices"></div>
+        <p class="distribution-label">
+          Indexed elements
+          <span id="ranking-note">Choose next to rank</span>
+        </p>
+        <div id="choices" class="choices">
+          <p class="muted" style="padding: 16px; color:#888; font-size:12px;">Available actions will appear here.</p>
+        </div>
+        <p class="aside-note">
+          Operation and target are separate choices in one request.<br />Text is generated only for TYPE_TEXT.
+        </p>
+      </aside>
+
+      <!-- 3. Chat Messages & Execution Trail -->
+      <div class="chat-panel">
+        <div class="chat-header">Decision Trail & Conversation</div>
+        <div id="human-intervention-container" style="display:none; padding: 0 16px;"></div>
+        <div class="chat-messages" id="chat-messages"></div>
+      </div>
+  </main>
+
+  <!-- Memory Vault Modal -->
+  <div id="memory-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)closeMemoryModal()">
+    <div class="modal-dialog">
+      <div class="modal-header" style="align-items:flex-start;">
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h2 style="font-size:18px; font-weight:600; color:#1f1f1f; display:flex; align-items:center; gap:8px;">
+              <span class="gemini-sparkle" style="font-size:20px;">✨</span> Saved info
+            </h2>
+            <div style="display:flex; align-items:center; gap:9px; font-size:12px; color:#444746;">
+              <span style="font-weight:500;">Remember info</span>
+              <label class="gemini-toggle" title="Toggle memory on or off">
+                <input type="checkbox" id="memory-toggle-switch" checked onchange="toggleMemoryActive(this.checked)">
+                <span class="gemini-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <p style="font-size:12px; color:#5e5e5e; margin:0 0 8px; line-height:1.45;">
+            Jev uses saved info to tailor actions, remember search patterns, and auto-complete forms across tasks.
+          </p>
+          <div id="graph-stats-bar" style="font-size:11px; color:#444; background:#f0f4f9; border:1px solid #d3e3fd; padding:3px 10px; border-radius:999px; display:inline-flex; gap:12px;">
+            <span>📦 <b id="stat-items">0</b> facts</span>
+            <span>🏷️ <b id="stat-nodes">0</b> entities</span>
+            <span>🔗 <b id="stat-edges">0</b> relations</span>
+          </div>
+        </div>
+        <button type="button" onclick="closeMemoryModal()" style="min-height:28px; padding:2px 8px; font-size:22px; border:none; background:transparent; cursor:pointer; color:#757575; margin-left:14px; line-height:1;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Main Tabs: Graph vs Patterns/History -->
+        <div style="display:flex; gap:8px; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:14px;">
+          <button type="button" id="main-tab-graph-btn" onclick="switchMainTab('graph')" style="min-height:26px; padding:3px 12px; font-size:12px; background:#e9f2e7; color:#176743; font-weight:600; border-color:#adc7ae;">🧠 Knowledge Graph</button>
+          <button type="button" id="main-tab-history-btn" onclick="switchMainTab('history')" style="min-height:26px; padding:3px 12px; font-size:12px; background:white; color:#555; font-weight:500;">📜 Search Patterns & History</button>
+        </div>
+
+        <!-- Tab 1: Graph Container -->
+        <div id="view-graph-container">
+          <!-- Add Memory Form -->
+          <div style="background:#f8f9f5; border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <label style="font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:0.5px;">Add to Knowledge Graph</label>
+              <div style="font-size:11px; display:flex; gap:6px;">
+                <button type="button" id="tab-fact-btn" onclick="toggleInputMode('fact')" style="min-height:22px; padding:2px 8px; font-size:11px; background:#e9f2e7; color:#176743; border-color:#adc7ae;">Natural Fact</button>
+                <button type="button" id="tab-rel-btn" onclick="toggleInputMode('rel')" style="min-height:22px; padding:2px 8px; font-size:11px;">Explicit Triplet</button>
+              </div>
+            </div>
+
+            <!-- Mode 1: Natural Fact Snippet (Auto-extracts triplets) -->
+            <div id="form-fact-mode" style="display:flex; gap:8px;">
+              <input type="text" id="new-mem-text" placeholder="e.g. Jane Doe is my wife, or Passport: X9876543 (auto-constructs graph)" style="flex:1; background:white; border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:13px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addMemorySnippet();}" />
+              <select id="new-mem-cat" style="border:1px solid var(--line); border-radius:6px; background:white; padding:7px 8px; font-size:12px;">
+                <option value="personal">Personal</option>
+                <option value="travel">Travel</option>
+                <option value="procedure">Procedure</option>
+                <option value="billing">Billing</option>
+                <option value="general">General</option>
+              </select>
+              <button type="button" class="primary" onclick="addMemorySnippet()" style="min-height:32px; padding:6px 14px; font-size:12px;">Save</button>
+            </div>
+
+            <!-- Mode 2: Explicit Triplet (Subject -> Relation -> Object) -->
+            <div id="form-rel-mode" style="display:none; gap:8px;">
+              <input type="text" id="rel-source" placeholder="Subject (e.g. Alice)" style="flex:1; background:white; border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:12px;" />
+              <input type="text" id="rel-name" placeholder="Relation (e.g. WORKS_AT)" style="flex:1; background:white; border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:12px;" />
+              <input type="text" id="rel-target" placeholder="Object (e.g. Google)" style="flex:1; background:white; border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:12px;" />
+              <button type="button" class="primary" onclick="addExplicitRelation()" style="min-height:32px; padding:6px 14px; font-size:12px;">Link</button>
+            </div>
+          </div>
+
+          <!-- Interactive Force-Directed Knowledge Graph Visualizer -->
+          <div class="graph-canvas-container" id="graph-vis-wrapper">
+            <div class="graph-canvas-toolbar">
+              <button type="button" class="graph-canvas-btn" onclick="resetGraphPhysics()" title="Reset layout">🔄 Reset</button>
+              <button type="button" class="graph-canvas-btn" onclick="toggleGraphFullscreen()" title="Toggle View">🔍 Focus</button>
+            </div>
+            <canvas id="knowledge-graph-canvas"></canvas>
+            <div class="graph-legend">
+              <span>● Blue: Entities</span>
+              <span>— Grey: Relations</span>
+              <span>✨ Drag nodes to arrange</span>
+            </div>
+          </div>
+
+          <!-- Search / Test Retrieval -->
+          <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+            <input type="text" id="mem-search-input" placeholder="Multi-Hop Search (e.g. wife passport, Delta flyer, or Alice company)..." style="flex:1; background:white; border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:12px;" oninput="searchMemorySnippets()" />
+          </div>
+
+          <!-- Category Filter Chips -->
+          <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+            <button type="button" class="gemini-filter-chip active" id="chip-filter-all" onclick="filterMemoryCategory('all')">All</button>
+            <button type="button" class="gemini-filter-chip" id="chip-filter-personal" onclick="filterMemoryCategory('personal')">Personal</button>
+            <button type="button" class="gemini-filter-chip" id="chip-filter-travel" onclick="filterMemoryCategory('travel')">Travel</button>
+            <button type="button" class="gemini-filter-chip" id="chip-filter-procedure" onclick="filterMemoryCategory('procedure')">Procedure & Search</button>
+            <button type="button" class="gemini-filter-chip" id="chip-filter-billing" onclick="filterMemoryCategory('billing')">Billing</button>
+          </div>
+
+          <!-- Memory Items List -->
+          <div id="memory-list" style="display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; padding-right:4px;">
+            <!-- Loaded dynamically -->
+          </div>
+        </div>
+
+        <!-- Tab 2: History & Patterns Container -->
+        <div id="view-history-container" style="display:none; flex-direction:column; gap:14px;">
+          <!-- Distilled Website Search Patterns -->
+          <div style="background:#f8f9f5; border:1px solid var(--line); border-radius:8px; padding:12px 14px;">
+            <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:0.5px; margin-bottom:8px;">
+              🔍 Distilled Website Search Patterns
+            </div>
+            <div id="patterns-list" style="display:flex; flex-direction:column; gap:6px; max-height:130px; overflow-y:auto;">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+
+          <!-- Execution History Log -->
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:0.5px;">
+                📜 Task Execution History
+              </div>
+              <button type="button" onclick="clearTaskHistory()" style="min-height:22px; padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5;">Clear History</button>
+            </div>
+            <div id="history-runs-list" style="display:flex; flex-direction:column; gap:8px; max-height:180px; overflow-y:auto;">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const msgsEl = document.getElementById('chat-messages');
+    const formEl = document.getElementById('chat-form');
+    const inputEl = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const urlEl = document.getElementById('browser-url');
+    const screenshotEl = document.getElementById('screenshot');
+    const emptyStateEl = document.getElementById('empty-state');
+    const targetsEl = document.getElementById('targets');
+    const pageTitleEl = document.getElementById('page-title');
+    const statusText = document.getElementById('status-text');
+    const statusDot = document.getElementById('status-dot');
+    const headerDot = document.getElementById('header-dot');
+
+    const actionCountEl = document.getElementById('action-count');
+    const choiceTitleEl = document.getElementById('choice-title');
+    const latencyEl = document.getElementById('latency');
+    const confidenceEl = document.getElementById('confidence');
+    const completionEl = document.getElementById('completion');
+    const rankingNoteEl = document.getElementById('ranking-note');
+    const opChoicesEl = document.getElementById('operation-choices');
+    const choicesEl = document.getElementById('choices');
+    const stopBtn = document.getElementById('stop-btn');
+    const toolbarStopBtn = document.getElementById('toolbar-stop-btn');
+
+    async function handleStop() {
+      stopBtn.disabled = true;
+      stopBtn.textContent = 'Stopping…';
+      toolbarStopBtn.disabled = true;
+      toolbarStopBtn.textContent = 'Stopping…';
+      try {
+        await fetch('/api/stop', { method: 'POST' });
+      } catch (err) {
+        console.error(err);
+      }
+      pollStatus();
+    }
+
+    stopBtn.addEventListener('click', handleStop);
+    toolbarStopBtn.addEventListener('click', handleStop);
+
+    let lastData = null;
+
+    function render(data) {
+      if (!data) return;
+      const isRunning = Boolean(data.running);
+      sendBtn.disabled = isRunning;
+      sendBtn.style.display = isRunning ? 'none' : 'inline-block';
+      inputEl.disabled = isRunning;
+      stopBtn.style.display = isRunning ? 'inline-flex' : 'none';
+      toolbarStopBtn.style.display = isRunning ? 'inline-flex' : 'none';
+      if (!isRunning) {
+        stopBtn.disabled = false;
+        stopBtn.innerHTML = 'Stop <span>⏹</span>';
+        toolbarStopBtn.disabled = false;
+        toolbarStopBtn.innerHTML = 'Stop execution ⏹';
+      }
+      statusDot.className = isRunning ? 'dot running' : 'dot';
+      headerDot.className = isRunning ? 'dot running' : 'dot';
+      statusText.textContent = isRunning ? (data.current_step || 'Running...') : 'Ready to explore';
+
+      const page = data.page;
+      const d = data.decision;
+      const elements = data.elements || [];
+
+      // Update Browser Bar & Footer
+      if (page && page.url) urlEl.textContent = page.url;
+      if (page && page.title) pageTitleEl.textContent = page.title;
+
+      // Update Screenshot & Target Overlays
+      if (page && page.screenshot) {
+        screenshotEl.hidden = false;
+        screenshotEl.src = `data:image/jpeg;base64,${page.screenshot}`;
+        emptyStateEl.hidden = true;
+
+        if (page.actions && page.w && page.h) {
+          const selectedIndex = d?.target ? String(d.target).split(':')[0] : null;
+          const targetsMap = new Map();
+          for (const a of page.actions) {
+            if (a.rect && !targetsMap.has(a.node)) targetsMap.set(a.node, a);
+          }
+          targetsEl.innerHTML = [...targetsMap.values()].map((a, i) => {
+            const idx = String(i + 1);
+            const isSel = idx === selectedIndex;
+            return `<div class="target ${isSel ? 'selected' : ''}" style="left:${100 * a.rect.x / page.w}%; top:${100 * a.rect.y / page.h}%; width:${100 * a.rect.w / page.w}%; height:${100 * a.rect.h / page.h}%;"><span>${idx}</span></div>`;
+          }).join('');
+        }
+      }
+
+      // Update NEXT ACTION Card
+      actionCountEl.textContent = `${elements.length} options`;
+
+      const chosenAction = page?.actions?.find(a => a.id === d?.choice);
+      choiceTitleEl.textContent = d ? (chosenAction?.label || d.choice) : (isRunning ? 'Choosing next action...' : 'Waiting for a page');
+      latencyEl.textContent = d?.latency_ms != null ? (d.fast_path ? `⚡ ${d.latency_ms} ms (Fast-Path)` : `${d.latency_ms} ms`) : '—';
+
+      const conf = d?.target_confidence != null ? d.target_confidence : d?.confidence;
+      confidenceEl.textContent = conf != null ? `${Math.round(conf * 100)}%` : '—';
+      completionEl.textContent = d ? d.operation : '—';
+      rankingNoteEl.textContent = d ? (d.fast_path ? '⚡ Fast-Path Macro Replay' : 'Ranked by Jev') : 'Unranked';
+
+      // Operation Choices Pills
+      const opEntries = Object.entries(d?.operation_probabilities || {}).sort((a, b) => b[1] - a[1]);
+      if (opEntries.length > 0) {
+        opChoicesEl.innerHTML = opEntries.map(([opName, p]) =>
+          `<span class="operation-choice ${opName === d?.operation ? 'best' : ''}">${escapeHtml(opName)} <b>${Math.round(p * 100)}%</b></span>`
+        ).join('');
+      } else {
+        opChoicesEl.innerHTML = '';
+      }
+
+      // Indexed Elements List
+      if (elements.length > 0) {
+        const targetProbs = d?.target_probabilities || {};
+        const selectedIndex = d?.target ? String(d.target).split(':')[0] : null;
+
+        const getProb = (el) => {
+          if (targetProbs[el.index] != null) return targetProbs[el.index];
+          if (el.options && el.options.length > 0) {
+            return Math.max(-1, ...el.options.map(o => targetProbs[o.index] ?? -1));
+          }
+          return -1;
+        };
+
+        const sorted = [...elements];
+        if (d && Object.keys(targetProbs).length > 0) {
+          sorted.sort((a, b) => getProb(b) - getProb(a));
+        }
+
+        choicesEl.innerHTML = sorted.map(el => {
+          const p = getProb(el);
+          const isSelected = selectedIndex === String(el.index);
+          const valTxt = el.value ? ` · ${escapeHtml(el.value)}` : '';
+          const checkedTxt = el.checked !== undefined ? ` · checked ${el.checked}` : '';
+          const barStyle = p >= 0 ? `<div class="bar" style="--probability: ${Math.round(p * 100)}%;"></div>` : '';
+          return `<div class="choice ${isSelected ? 'best' : ''}">
+            <span class="choice-id">[${escapeHtml(el.index)}]</span>
+            <div class="choice-label">
+              ${escapeHtml(el.label)}
+              <small>${escapeHtml(el.role || '')} · ${escapeHtml((el.operations || []).join(' / '))}${valTxt}${checkedTxt}</small>
+              ${barStyle}
+            </div>
+            <span class="probability">${p >= 0 ? `${Math.round(p * 100)}%` : '—'}</span>
+          </div>`;
+        }).join('');
+      } else {
+        choicesEl.innerHTML = '<p class="muted" style="padding: 16px; color:#888; font-size:12px;">Available actions will appear here.</p>';
+      }
+
+      // Human Intervention Banner
+      const interventionBox = document.getElementById('human-intervention-container');
+      if (interventionBox) {
+        if (data.human_intervention && isRunning) {
+          const kind = data.human_intervention.kind || '2fa_otp';
+          const reason = data.human_intervention.reason || 'Verification Required';
+          const isOtp = kind === '2fa_otp';
+          interventionBox.style.display = 'block';
+          interventionBox.innerHTML = `
+            <div class="intervention-banner">
+              <div class="intervention-header">
+                <span class="intervention-title">⚠️ Human Action Needed: ${escapeHtml(reason)}</span>
+                <span style="font-size:11px; color:#b45309; font-weight:600;">PAUSED</span>
+              </div>
+              <div class="intervention-desc">
+                ${isOtp
+                  ? 'A one-time passcode or verification prompt was detected. Enter the code below or complete it in the browser window and click resume.'
+                  : 'A security challenge/CAPTCHA was detected. Please solve it in the browser window, then click resume.'}
+              </div>
+              <div class="intervention-actions">
+                ${isOtp ? `
+                  <input type="text" id="intervention-otp-input" placeholder="123456" maxlength="10" onkeydown="if(event.key==='Enter'){event.preventDefault();submitInterventionOtp();}" />
+                  <button type="button" class="intervention-btn-resume" onclick="submitInterventionOtp()">Enter Code & Continue ↵</button>
+                ` : ''}
+                <button type="button" class="intervention-btn-resume" style="background:#4b5563;" onclick="resumeAfterHumanIntervention()">I Completed It In Browser ↗</button>
+              </div>
+            </div>
+          `;
+        } else {
+          interventionBox.style.display = 'none';
+          interventionBox.innerHTML = '';
+        }
+      }
+
+      // Render Chat Messages & Steps
+      msgsEl.innerHTML = (data.messages || []).map((m) => {
+        const isUser = m.role === 'user';
+        const roleLabel = isUser ? 'YOU' : 'JEV browser';
+        let stepsHtml = '';
+        if (m.steps && m.steps.length > 0) {
+          stepsHtml = `<div class="trace-list">` + m.steps.map(s => {
+            const txt = s.text ? ` · "<b>${escapeHtml(s.text)}</b>"` : '';
+            const fastBadge = s.fast_path ? `<span class="fast-path-badge">⚡ Fast-path (${s.latency_ms}ms)</span>` : '';
+            return `<div class="trace-row"><span class="num">[${s.step}]</span><span class="action-desc">${fastBadge}${escapeHtml(s.action)}${txt}</span><span class="lat">${s.latency_ms} ms</span></div>`;
+          }).join('') + `</div>`;
+        }
+
+        let memoryPillsHtml = '';
+        if (!isUser) {
+          if (m.used_memories && m.used_memories.length > 0) {
+            const detail = m.used_memories.join(' · ');
+            memoryPillsHtml += `
+              <div>
+                <div class="gemini-memory-pill" title="${escapeHtml(detail)}">
+                  <span class="gemini-sparkle">✨</span>
+                  <span>Used saved info:</span>
+                  <span class="gemini-info-text">${escapeHtml(m.used_memories[0])}${m.used_memories.length > 1 ? ` (+${m.used_memories.length - 1} more)` : ''}</span>
+                </div>
+              </div>
+            `;
+          }
+          if (m.memory_updated) {
+            memoryPillsHtml += `
+              <div>
+                <div class="gemini-memory-pill updated">
+                  <span class="gemini-sparkle">✨</span>
+                  <span>Memory updated:</span>
+                  <span class="gemini-info-text">${escapeHtml(m.memory_updated)}</span>
+                </div>
+              </div>
+            `;
+          }
+        }
+
+        let extractionCardHtml = '';
+        if (!isUser && m.extracted_data) {
+          const d = m.extracted_data;
+          const attrs = Object.entries(d.attributes || {});
+          const gridHtml = attrs.length > 0
+            ? `<div class="extraction-grid">` + attrs.map(([k, v]) => `
+                <div class="extraction-item">
+                  <div class="extraction-item-key">${escapeHtml(k)}</div>
+                  <div class="extraction-item-val">${escapeHtml(String(v))}</div>
+                </div>
+              `).join('') + `</div>`
+            : '';
+
+          let tableHtml = '';
+          if (Array.isArray(d.table) && d.table.length > 0) {
+            const cols = Object.keys(d.table[0]);
+            tableHtml = `
+              <div class="extraction-table-wrapper">
+                <table class="extraction-table">
+                  <thead>
+                    <tr>${cols.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr>
+                  </thead>
+                  <tbody>
+                    ${d.table.map(row => `
+                      <tr>${cols.map(c => `<td>${escapeHtml(String(row[c] ?? ''))}</td>`).join('')}</tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          }
+
+          const rawJson = encodeURIComponent(JSON.stringify(d, null, 2));
+          extractionCardHtml = `
+            <div class="extraction-card">
+              <div class="extraction-card-header">
+                <div class="extraction-card-title">
+                  <span>📊</span>
+                  <span>${escapeHtml(d.title || 'Extracted Summary')}</span>
+                </div>
+                <button type="button" class="extraction-copy-btn" onclick="copyExtractedData('${rawJson}')">📋 Copy Data</button>
+              </div>
+              ${d.summary ? `<div class="extraction-summary">${escapeHtml(d.summary)}</div>` : ''}
+              ${gridHtml}
+              ${tableHtml}
+            </div>
+          `;
+        }
+
+        return `<div class="chat-msg ${isUser ? 'user' : 'assistant'}">
+          <div class="msg-header"><span>${roleLabel}</span><span>${m.elapsed_ms ? (m.elapsed_ms/1000).toFixed(2)+'s' : ''}</span></div>
+          <div>${formatMarkdown(m.content)}</div>
+          ${extractionCardHtml}
+          ${memoryPillsHtml}
+          ${stepsHtml}
+        </div>`;
+      }).join('');
+
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+
+    function formatMarkdown(text) {
+      if (!text) return '';
+      const links = [];
+      let str = text.replace(/\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/g, (m, label, href) => {
+        links.push({ label, href });
+        return `___LINK_${links.length - 1}___`;
+      });
+      str = escapeHtml(str);
+      str = str.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+      str = str.replace(/\*([^*]+)\*/g, '<i>$1</i>');
+      str = str.replace(/___LINK_(\d+)___/g, (m, idx) => {
+        const item = links[Number(idx)];
+        return `<a href="${encodeURI(item.href)}" target="_blank" rel="noopener" style="color:#176743; font-weight:600; text-decoration: underline;">${escapeHtml(item.label)} ↗</a>`;
+      });
+      return str.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+    }
+
+    window.copyExtractedData = function(encodedJson) {
+      try {
+        const text = decodeURIComponent(encodedJson);
+        navigator.clipboard.writeText(text);
+        alert('Extracted structured data copied to clipboard!');
+      } catch (err) {
+        alert('Failed to copy: ' + err);
+      }
+    };
+
+    window.sendSuggestion = function(s) {
+      inputEl.value = s;
+      formEl.dispatchEvent(new Event('submit'));
+    };
+
+    window.submitInterventionOtp = async function() {
+      const otpInp = document.getElementById('intervention-otp-input');
+      const code = otpInp ? otpInp.value.trim() : '';
+      if (!code) return alert('Please enter the verification code.');
+      try {
+        await fetch('/api/otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        pollStatus();
+      } catch (err) {
+        alert('Failed to submit verification code: ' + err);
+      }
+    };
+
+    window.resumeAfterHumanIntervention = async function() {
+      try {
+        await fetch('/api/resume', { method: 'POST' });
+        pollStatus();
+      } catch (err) {
+        alert('Failed to resume: ' + err);
+      }
+    };
+
+    window.toggleMemoryActive = function(checked) {
+      localStorage.setItem('jev_memory_enabled', checked ? 'true' : 'false');
+    };
+
+    function isMemoryActive() {
+      return localStorage.getItem('jev_memory_enabled') !== 'false';
+    }
+
+    // Initialize toggle switch state from localStorage
+    const memToggleSwitch = document.getElementById('memory-toggle-switch');
+    if (memToggleSwitch) {
+      memToggleSwitch.checked = isMemoryActive();
+    }
+
+    formEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const val = inputEl.value.trim();
+      if (!val) return;
+      inputEl.value = '';
+      sendBtn.disabled = true;
+
+      await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: val,
+          memory_enabled: isMemoryActive()
+        })
+      });
+      pollStatus();
+    });
+
+    async function pollStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        lastData = data;
+        render(data);
+        if (data.running) {
+          setTimeout(pollStatus, 250);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Graph RAG Memory Logic
+    const memoryModal = document.getElementById('memory-modal');
+    const memoryListEl = document.getElementById('memory-list');
+    const memoryBadgeEl = document.getElementById('memory-count-badge');
+    const statItemsEl = document.getElementById('stat-items');
+    const statNodesEl = document.getElementById('stat-nodes');
+    const statEdgesEl = document.getElementById('stat-edges');
+    let currentMemories = [];
+    let currentGraph = null;
+
+    window.toggleInputMode = function(mode) {
+      const factDiv = document.getElementById('form-fact-mode');
+      const relDiv = document.getElementById('form-rel-mode');
+      const factBtn = document.getElementById('tab-fact-btn');
+      const relBtn = document.getElementById('tab-rel-btn');
+      if (mode === 'rel') {
+        factDiv.style.display = 'none';
+        relDiv.style.display = 'flex';
+        relBtn.style.background = '#e9f2e7';
+        relBtn.style.color = '#176743';
+        relBtn.style.borderColor = '#adc7ae';
+        factBtn.style.background = 'white';
+        factBtn.style.color = '#494b43';
+        factBtn.style.borderColor = 'var(--line)';
+      } else {
+        factDiv.style.display = 'flex';
+        relDiv.style.display = 'none';
+        factBtn.style.background = '#e9f2e7';
+        factBtn.style.color = '#176743';
+        factBtn.style.borderColor = '#adc7ae';
+        relBtn.style.background = 'white';
+        relBtn.style.color = '#494b43';
+        relBtn.style.borderColor = 'var(--line)';
+      }
+    };
+
+    let selectedFilterCategory = 'all';
+
+    window.filterMemoryCategory = function(cat) {
+      selectedFilterCategory = cat;
+      const chips = ['all', 'personal', 'travel', 'procedure', 'billing'];
+      chips.forEach(c => {
+        const el = document.getElementById('chip-filter-' + c);
+        if (el) {
+          if (c === cat) el.classList.add('active');
+          else el.classList.remove('active');
+        }
+      });
+      applyCurrentFilter();
+    };
+
+    function applyCurrentFilter() {
+      if (selectedFilterCategory === 'all') {
+        renderMemoryList(currentMemories);
+      } else {
+        const filtered = currentMemories.filter(m => (m.category || 'general').toLowerCase() === selectedFilterCategory);
+        renderMemoryList(filtered);
+      }
+    }
+
+    async function loadMemories() {
+      try {
+        const res = await fetch('/api/memory');
+        const data = await res.json();
+        currentMemories = data.items || [];
+        currentGraph = data.graph || { counts: { nodes: 0, edges: 0, items: 0 } };
+
+        const counts = currentGraph.counts || { nodes: 0, edges: 0, items: currentMemories.length };
+        if (statItemsEl) statItemsEl.textContent = String(counts.items ?? currentMemories.length);
+        if (statNodesEl) statNodesEl.textContent = String(counts.nodes ?? 0);
+        if (statEdgesEl) statEdgesEl.textContent = String(counts.edges ?? 0);
+        if (memoryBadgeEl) memoryBadgeEl.textContent = `${counts.items} facts · ${counts.edges} edges`;
+
+        applyCurrentFilter();
+        if (currentGraph) {
+          initGraphNodesAndEdges(currentGraph);
+        }
+      } catch (e) {
+        console.error('Failed to load Graph RAG memory:', e);
+      }
+    }
+
+    function renderMemoryList(items) {
+      if (!memoryListEl) return;
+      if (!items || items.length === 0) {
+        memoryListEl.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; padding:20px;">No facts match this filter. Add personal details, credentials, or site procedures above.</p>';
+        return;
+      }
+      memoryListEl.innerHTML = items.map(item => {
+        const isGraphRel = item.category === 'graph_relation';
+        const isLearned = (item.category === 'procedure') || (item.source === 'task') || (item.text && item.text.startsWith('Procedure:'));
+        const catBadge = isGraphRel
+          ? `<span class="mem-card-cat" style="background:#e0e7ff; color:#3730a3;">GRAPH PATH</span>`
+          : `<span class="mem-card-cat">${escapeHtml(item.category || 'general')}</span>`;
+        const scoreBadge = item.score != null ? `<span class="mem-card-score">Score: ${Math.round(item.score * 100)}%</span>` : '';
+        const sourceBadge = isLearned
+          ? `<span class="gemini-source-badge learned" title="Distilled automatically from successful browsing"><span class="gemini-sparkle">✨</span> Learned from task</span>`
+          : `<span class="gemini-source-badge">Added manually</span>`;
+        const delBtn = isGraphRel ? '' : `<button class="del-btn" onclick="deleteMemorySnippet('${item.id}')" title="Delete fact">&times;</button>`;
+        return `
+          <div class="mem-card" style="align-items:flex-start;">
+            <div style="flex:1;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                ${catBadge}
+                ${sourceBadge}
+                ${scoreBadge}
+              </div>
+              <div class="mem-card-text">${escapeHtml(item.text)}</div>
+            </div>
+            ${delBtn}
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.openMemoryModal = function() {
+      memoryModal.style.display = 'flex';
+      loadMemories();
+      setTimeout(initKnowledgeGraphCanvas, 50);
+    };
+
+    // Force-directed Physics Knowledge Graph Visualizer
+    let graphAnimId = null;
+    let graphNodes = [];
+    let graphEdges = [];
+    let draggedNode = null;
+    let isGraphFocused = false;
+
+    window.toggleGraphFullscreen = function() {
+      const wrapper = document.getElementById('graph-vis-wrapper');
+      isGraphFocused = !isGraphFocused;
+      wrapper.style.height = isGraphFocused ? '360px' : '220px';
+      setTimeout(initKnowledgeGraphCanvas, 100);
+    };
+
+    window.resetGraphPhysics = function() {
+      if (!currentGraph) return;
+      initGraphNodesAndEdges(currentGraph);
+    };
+
+    function initGraphNodesAndEdges(graphData) {
+      const canvas = document.getElementById('knowledge-graph-canvas');
+      if (!canvas) return;
+      const width = canvas.clientWidth || 600;
+      const height = canvas.clientHeight || 220;
+
+      const rawNodes = graphData.nodes || [];
+      const rawEdges = graphData.edges || [];
+
+      // Create indexed node objects with positions & velocities
+      const nodeMap = new Map();
+      graphNodes = rawNodes.map((n, i) => {
+        const angle = (i / Math.max(1, rawNodes.length)) * 2 * Math.PI;
+        const radius = Math.min(width, height) * 0.35;
+        const obj = {
+          id: n.id,
+          name: n.name || n.id,
+          category: n.category || 'general',
+          x: width / 2 + Math.cos(angle) * radius + (Math.random() - 0.5) * 20,
+          y: height / 2 + Math.sin(angle) * radius + (Math.random() - 0.5) * 20,
+          vx: 0,
+          vy: 0,
+          radius: 14,
+        };
+        nodeMap.set(n.id, obj);
+        return obj;
+      });
+
+      graphEdges = rawEdges.map(e => ({
+        source: nodeMap.get(e.source) || e.source,
+        target: nodeMap.get(e.target) || e.target,
+        relation: e.relation || '',
+      })).filter(e => typeof e.source === 'object' && typeof e.target === 'object');
+    }
+
+    function initKnowledgeGraphCanvas() {
+      const canvas = document.getElementById('knowledge-graph-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      if (graphNodes.length === 0 && currentGraph) {
+        initGraphNodesAndEdges(currentGraph);
+      }
+
+      // Mouse drag event listeners
+      canvas.onmousedown = (e) => {
+        const cRect = canvas.getBoundingClientRect();
+        const mx = e.clientX - cRect.x;
+        const my = e.clientY - cRect.y;
+        for (const n of graphNodes) {
+          const dx = n.x - mx;
+          const dy = n.y - my;
+          if (Math.sqrt(dx * dx + dy * dy) <= n.radius + 6) {
+            draggedNode = n;
+            break;
+          }
+        }
+      };
+
+      window.onmousemove = (e) => {
+        if (!draggedNode) return;
+        const cRect = canvas.getBoundingClientRect();
+        draggedNode.x = Math.max(20, Math.min(cRect.width - 20, e.clientX - cRect.x));
+        draggedNode.y = Math.max(20, Math.min(cRect.height - 20, e.clientY - cRect.y));
+        draggedNode.vx = 0;
+        draggedNode.vy = 0;
+      };
+
+      window.onmouseup = () => {
+        draggedNode = null;
+      };
+
+      if (graphAnimId) cancelAnimationFrame(graphAnimId);
+
+      function step() {
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (graphNodes.length === 0) {
+          ctx.font = '12px system-ui, sans-serif';
+          ctx.fillStyle = '#999';
+          ctx.textAlign = 'center';
+          ctx.fillText('No entities in Knowledge Graph yet. Add facts to view nodes and links.', w / 2, h / 2);
+          return;
+        }
+
+        // 1. Force Physics Simulation
+        // Repulsion between nodes
+        for (let i = 0; i < graphNodes.length; i++) {
+          for (let j = i + 1; j < graphNodes.length; j++) {
+            const n1 = graphNodes[i];
+            const n2 = graphNodes[j];
+            const dx = n2.x - n1.x;
+            const dy = n2.y - n1.y;
+            const dist = Math.max(10, Math.sqrt(dx * dx + dy * dy));
+            const force = (800 / (dist * dist));
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            if (n1 !== draggedNode) { n1.vx -= fx; n1.vy -= fy; }
+            if (n2 !== draggedNode) { n2.vx += fx; n2.vy += fy; }
+          }
+        }
+
+        // Attraction along edges (Spring force)
+        for (const edge of graphEdges) {
+          const n1 = edge.source;
+          const n2 = edge.target;
+          const dx = n2.x - n1.x;
+          const dy = n2.y - n1.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const spring = (dist - 80) * 0.04;
+          const fx = (dx / (dist || 1)) * spring;
+          const fy = (dy / (dist || 1)) * spring;
+          if (n1 !== draggedNode) { n1.vx += fx; n1.vy += fy; }
+          if (n2 !== draggedNode) { n2.vx -= fx; n2.vy -= fy; }
+        }
+
+        // Gravity toward center and damping
+        for (const n of graphNodes) {
+          if (n !== draggedNode) {
+            n.vx += (w / 2 - n.x) * 0.015;
+            n.vy += (h / 2 - n.y) * 0.015;
+            n.vx *= 0.85;
+            n.vy *= 0.85;
+            n.x += n.vx;
+            n.y += n.vy;
+            n.x = Math.max(20, Math.min(w - 20, n.x));
+            n.y = Math.max(20, Math.min(h - 20, n.y));
+          }
+        }
+
+        // 2. Render Edges & Labels
+        for (const edge of graphEdges) {
+          ctx.beginPath();
+          ctx.moveTo(edge.source.x, edge.source.y);
+          ctx.lineTo(edge.target.x, edge.target.y);
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          if (edge.relation) {
+            const midX = (edge.source.x + edge.target.x) / 2;
+            const midY = (edge.source.y + edge.target.y) / 2;
+            ctx.font = '9px monospace';
+            ctx.fillStyle = '#64748b';
+            ctx.textAlign = 'center';
+            ctx.fillText(edge.relation.toLowerCase(), midX, midY - 3);
+          }
+        }
+
+        // 3. Render Nodes
+        for (const n of graphNodes) {
+          // Node circle
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+          ctx.fillStyle = n === draggedNode ? '#0b57d0' : '#dbeafe';
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#3b82f6';
+          ctx.stroke();
+
+          // Node text label
+          ctx.font = '11px system-ui, sans-serif';
+          ctx.fillStyle = n === draggedNode ? 'white' : '#1e3a8a';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const label = n.name.length > 9 ? n.name.slice(0, 8) + '…' : n.name;
+          ctx.fillText(label, n.x, n.y);
+        }
+
+        graphAnimId = requestAnimationFrame(step);
+      }
+
+      step();
+    }
+
+    window.closeMemoryModal = function() {
+      memoryModal.style.display = 'none';
+      const searchInp = document.getElementById('mem-search-input');
+      if (searchInp) searchInp.value = '';
+    };
+
+    window.addMemorySnippet = async function() {
+      const textInp = document.getElementById('new-mem-text');
+      const catSel = document.getElementById('new-mem-cat');
+      const text = textInp.value.trim();
+      const category = catSel.value;
+      if (!text) return;
+      try {
+        await fetch('/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, category })
+        });
+        textInp.value = '';
+        await loadMemories();
+      } catch (e) {
+        alert('Failed to save to Knowledge Graph: ' + e);
+      }
+    };
+
+    window.addExplicitRelation = async function() {
+      const sInp = document.getElementById('rel-source');
+      const rInp = document.getElementById('rel-name');
+      const tInp = document.getElementById('rel-target');
+      const source = sInp.value.trim();
+      const relation = rInp.value.trim();
+      const target = tInp.value.trim();
+      if (!source || !relation || !target) return alert('Source, Relation, and Target are all required.');
+      try {
+        await fetch('/api/memory/relation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source, relation, target })
+        });
+        sInp.value = '';
+        rInp.value = '';
+        tInp.value = '';
+        await loadMemories();
+      } catch (e) {
+        alert('Failed to link relation: ' + e);
+      }
+    };
+
+    window.deleteMemorySnippet = async function(id) {
+      try {
+        await fetch('/api/memory/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+        await loadMemories();
+      } catch (e) {
+        alert('Failed to delete: ' + e);
+      }
+    };
+
+    window.searchMemorySnippets = async function() {
+      const searchInp = document.getElementById('mem-search-input');
+      const q = searchInp.value.trim();
+      if (!q) {
+        renderMemoryList(currentMemories);
+        return;
+      }
+      try {
+        const res = await fetch('/api/memory/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q })
+        });
+        const data = await res.json();
+        renderMemoryList(data.results || []);
+      } catch (e) {
+        console.error('Multi-hop search failed:', e);
+      }
+    };
+
+    window.switchMainTab = function(tab) {
+      const gContainer = document.getElementById('view-graph-container');
+      const hContainer = document.getElementById('view-history-container');
+      const gBtn = document.getElementById('main-tab-graph-btn');
+      const hBtn = document.getElementById('main-tab-history-btn');
+      if (tab === 'history') {
+        gContainer.style.display = 'none';
+        hContainer.style.display = 'flex';
+        hBtn.style.background = '#e9f2e7';
+        hBtn.style.color = '#176743';
+        hBtn.style.borderColor = '#adc7ae';
+        hBtn.style.fontWeight = '600';
+        gBtn.style.background = 'white';
+        gBtn.style.color = '#555';
+        gBtn.style.borderColor = 'var(--line)';
+        gBtn.style.fontWeight = '500';
+        loadHistory();
+      } else {
+        gContainer.style.display = 'block';
+        hContainer.style.display = 'none';
+        gBtn.style.background = '#e9f2e7';
+        gBtn.style.color = '#176743';
+        gBtn.style.borderColor = '#adc7ae';
+        gBtn.style.fontWeight = '600';
+        hBtn.style.background = 'white';
+        hBtn.style.color = '#555';
+        hBtn.style.borderColor = 'var(--line)';
+        hBtn.style.fontWeight = '500';
+        loadMemories();
+      }
+    };
+
+    async function loadHistory() {
+      try {
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        renderPatternsList(data.patterns || []);
+        renderHistoryList(data.history || []);
+      } catch (e) {
+        console.error('Failed to load history & patterns:', e);
+      }
+    }
+
+    function renderPatternsList(patterns) {
+      const pList = document.getElementById('patterns-list');
+      if (!pList) return;
+      if (!patterns || patterns.length === 0) {
+        pList.innerHTML = '<p style="color:#888; font-size:12px; padding:10px;">No search patterns learned yet. Successfully completed search tasks will record navigation sequences here.</p>';
+        return;
+      }
+      pList.innerHTML = patterns.map(p => {
+        return `
+          <div style="background:white; border:1px solid var(--line); border-radius:6px; padding:8px 10px; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-weight:600; color:#176743; font-family:ui-monospace, monospace;">🌐 ${escapeHtml(p.domain)}</span>
+              <button type="button" class="suggestion-chip" style="padding:2px 8px; font-size:11px;" onclick="rerunTask('${escapeHtml(p.goal)}')">⚡ Rerun</button>
+            </div>
+            <div style="color:#444; font-size:11px; font-family:ui-monospace, monospace; line-height:1.4;">${escapeHtml(p.summary)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderHistoryList(runs) {
+      const hList = document.getElementById('history-runs-list');
+      if (!hList) return;
+      if (!runs || runs.length === 0) {
+        hList.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; padding:20px;">No task history yet. Completed tasks will appear here.</p>';
+        return;
+      }
+      hList.innerHTML = runs.map(r => {
+        const isDone = r.status === 'done';
+        const isErr = r.status === 'error';
+        const color = isDone ? '#176743' : (isErr ? '#dc2626' : '#d97706');
+        const bg = isDone ? '#e9f2e7' : (isErr ? '#fee2e2' : '#fef3c7');
+        return `
+          <div class="mem-card" style="align-items:flex-start;">
+            <div style="flex:1;">
+              <div style="display:flex; gap:8px; align-items:center; margin-bottom:4px;">
+                <span class="mem-card-cat" style="background:${bg}; color:${color}; font-weight:700;">${r.status.toUpperCase()}</span>
+                <span style="font-size:11px; color:#888; font-family:ui-monospace, monospace;">${r.elapsed_seconds}s · ${r.steps_count} steps</span>
+                <span style="font-size:11px; color:#666;">${escapeHtml(r.domain || '')}</span>
+              </div>
+              <div style="font-weight:500; color:#222; margin-bottom:3px;">${escapeHtml(r.goal)}</div>
+            </div>
+            <button type="button" class="suggestion-chip" style="padding:4px 10px; font-size:11px; white-space:nowrap;" onclick="rerunTask('${escapeHtml(r.goal)}')">⚡ Rerun</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.rerunTask = function(goal) {
+      closeMemoryModal();
+      inputEl.value = goal;
+      formEl.dispatchEvent(new Event('submit'));
+    };
+
+    window.clearTaskHistory = async function() {
+      if (!confirm('Clear all task execution history?')) return;
+      try {
+        await fetch('/api/history/clear', { method: 'POST' });
+        await loadHistory();
+      } catch (e) {
+        alert('Failed to clear history: ' + e);
+      }
+    };
+
+    pollStatus();
+    loadMemories();
+    setInterval(() => { if (!lastData || !lastData.running) pollStatus(); }, 2000);
+  </script>
+</body>
+</html>

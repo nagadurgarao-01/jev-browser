@@ -41,9 +41,29 @@
     }
     return null;
   };
-  cache.pageKey=()=>[performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,
+  const getScroll = () => {
+    const candidates = [
+      document.querySelector('main'),
+      document.querySelector('[role="main"]'),
+      ...(document.body ? [...document.body.children] : [])
+    ].filter(Boolean);
+    for (const el of candidates) {
+      if (el.clientHeight > 200 && el.scrollHeight > el.clientHeight + 20) {
+        const style = window.getComputedStyle(el);
+        if (['auto', 'scroll', 'overlay'].includes(style.overflowY)) {
+          return { y: el.scrollTop, height: el.scrollHeight, viewHeight: el.clientHeight };
+        }
+      }
+    }
+    const doc = document.scrollingElement || document.documentElement;
+    return { y: scrollY, height: doc ? doc.scrollHeight : document.documentElement.scrollHeight, viewHeight: innerHeight };
+  };
+  cache.pageKey=()=>{
+    const s=getScroll();
+    return [performance.timeOrigin,location.href,scrollX,s.y,innerWidth,innerHeight,
     [...document.querySelectorAll('input,textarea,select')].filter(safe)
       .map(e=>[identity(e),e.value,e.checked,e.selectedIndex,e.disabled,e.readOnly])];
+  };
   cache.guard=e=>{
     if (!e?.isConnected || !visible(e)) return null;
     const scope=e.closest('form,dialog,[role="dialog"],article,li,tr,[role="row"]') || e.parentElement;
@@ -89,19 +109,20 @@
       words.push(value); length+=value.length;
     }
   }
-  const text=words.join('\n').slice(0,6000), height=document.documentElement.scrollHeight;
+  const scrollInfo=getScroll();
+  const text=words.join('\n').slice(0,6000), height=scrollInfo.height;
   const page_key=cache.pageKey(), guards={};
   for (const a of actions) if (!(a.node in guards)) guards[a.node]=cache.guard(cache.nodes.get(a.node));
   // Compare meaning and identity. Geometry is always resolved and hit-tested just before input.
   const semantics=actions.map(({rect,...action})=>action);
-  const marker=[performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,
+  const marker=[performance.timeOrigin,location.href,scrollX,scrollInfo.y,innerWidth,innerHeight,
     document.title,text,semantics,page_key[6]];
   const omitted_actions=Math.max(0,actions.length-250);
   actions.splice(250);
   actions.forEach((a,i)=>a.id='e'+(i+1));
-  if (scrollY+innerHeight<height-2) actions.push({id:'scroll_down',kind:'scroll',label:'Scroll down',delta:560});
-  if (scrollY>0) actions.push({id:'scroll_up',kind:'scroll',label:'Scroll up',delta:-560});
+  if (scrollInfo.y+scrollInfo.viewHeight<height-2) actions.push({id:'scroll_down',kind:'scroll',label:'Scroll down',delta:560});
+  if (scrollInfo.y>0) actions.push({id:'scroll_up',kind:'scroll',label:'Scroll up',delta:-560});
   actions.push({id:'wait',kind:'wait',label:'Wait for the page to update'});
   return {url:location.href,title:document.title,w:innerWidth,h:innerHeight,text,
-    scroll:{y:scrollY,height},actions,marker,page_key,guards,omitted_actions};
+    scroll:{y:scrollInfo.y,height},actions,marker,page_key,guards,omitted_actions};
 })()
